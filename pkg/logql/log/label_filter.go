@@ -104,6 +104,10 @@ func (b *BinaryLabelFilter) RequiredLabelNames() []string {
 	return uniqueString(names)
 }
 
+func (b *BinaryLabelFilter) IsOpAnd() bool {
+	return b.and
+}
+
 func (b *BinaryLabelFilter) String() string {
 	var sb strings.Builder
 	sb.WriteString("( ")

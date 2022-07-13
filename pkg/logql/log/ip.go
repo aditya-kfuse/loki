@@ -118,6 +118,18 @@ func (f *IPLabelFilter) PatternError() error {
 	return f.patError
 }
 
+func (f *IPLabelFilter) GetType() LabelFilterType {
+	return f.ty
+}
+
+func (f *IPLabelFilter) GetPattern() string {
+	return f.pattern
+}
+
+func (f *IPLabelFilter) GetLabel() string {
+	return f.label
+}
+
 func (f *IPLabelFilter) filterTy(_ []byte, ty LabelFilterType, lbs *LabelsBuilder) bool {
 	if lbs.HasErr() {
 		// why `true`?. if there's an error only the string matchers can filter out.
