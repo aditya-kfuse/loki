@@ -1,0 +1,534 @@
+From 4204f38a0003cd904e00a1510a827dd555b9782c Mon Sep 17 00:00:00 2001
+From: vinayv-kf <81197235+vinayv-kf@users.noreply.github.com>
+Date: Tue, 12 Jul 2022 17:35:34 -0700
+Subject: [PATCH 1/8] Engine evaluator (#1)
+
+* WithEvaluator function for *logql.Engine
+
+WithEvaluator sets the loki engine with the passed in Evaluator. Useful in cases where an
+Evaluator with push down capabilities can be used to improve performance
+
+* Make certain StepEvaluators visible outside logql package
+
+ - binOpStepEvaluator
+ - labelReplaceStepEvaluator
+---
+ pkg/logql/engine.go      |  7 +++++++
+ pkg/logql/engine_test.go |  2 +-
+ pkg/logql/evaluator.go   | 10 +++++-----
+ 3 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/pkg/logql/engine.go b/pkg/logql/engine.go
+index 28ade4fd5..9ff02f764 100644
+--- a/pkg/logql/engine.go
++++ b/pkg/logql/engine.go
+@@ -139,6 +139,13 @@ func NewEngine(opts EngineOpts, q Querier, l Limits, logger log.Logger) *Engine
+ 	}
+ }
+ 
++// WithEvaluator sets the loki engine with the passed in Evaluator. Useful in cases where an
++// Evaluator with push down capabilities can be used to improve performance
++func (e *Engine) WithEvaluator(evaluator Evaluator) *Engine {
++	e.evaluator = evaluator
++	return e
++}
++
+ // Query creates a new LogQL query. Instant/Range type is derived from the parameters.
+ func (ng *Engine) Query(params Params) Query {
+ 	return &query{
+diff --git a/pkg/logql/engine_test.go b/pkg/logql/engine_test.go
+index 18fb29e9c..e8e7eb03b 100644
+--- a/pkg/logql/engine_test.go
++++ b/pkg/logql/engine_test.go
+@@ -2187,7 +2187,7 @@ func TestStepEvaluator_Error(t *testing.T) {
+ 			ErrMock,
+ 		},
+ 		{
+-			"binOpStepEvaluator",
++			"BinOpStepEvaluator",
+ 			`count_over_time({app="foo"}[1m]) / count_over_time({app="foo"}[1m])`,
+ 			&errorIteratorQuerier{
+ 				samples: []iter.SampleIterator{
+diff --git a/pkg/logql/evaluator.go b/pkg/logql/evaluator.go
+index 97cd1aad6..848cab49c 100644
+--- a/pkg/logql/evaluator.go
++++ b/pkg/logql/evaluator.go
+@@ -204,9 +204,9 @@ func (ev *DefaultEvaluator) StepEvaluator(
+ 		}
+ 		return rangeAggEvaluator(iter.NewPeekingSampleIterator(it), e, q, e.Left.Offset)
+ 	case *syntax.BinOpExpr:
+-		return binOpStepEvaluator(ctx, nextEv, e, q)
++		return BinOpStepEvaluator(ctx, nextEv, e, q)
+ 	case *syntax.LabelReplaceExpr:
+-		return labelReplaceEvaluator(ctx, nextEv, e, q)
++		return LabelReplaceEvaluator(ctx, nextEv, e, q)
+ 	default:
+ 		return nil, EvaluatorUnsupportedType(e, ev)
+ 	}
+@@ -512,9 +512,9 @@ func (r absentRangeVectorEvaluator) Error() error {
+ 	return r.iter.Error()
+ }
+ 
+-// binOpExpr explicitly does not handle when both legs are literals as
++// BinOpStepEvaluator binOpExpr explicitly does not handle when both legs are literals as
+ // it makes the type system simpler and these are reduced in mustNewBinOpExpr
+-func binOpStepEvaluator(
++func BinOpStepEvaluator(
+ 	ctx context.Context,
+ 	ev SampleEvaluator,
+ 	expr *syntax.BinOpExpr,
+@@ -875,7 +875,7 @@ func literalStepEvaluator(
+ 	)
+ }
+ 
+-func labelReplaceEvaluator(
++func LabelReplaceEvaluator(
+ 	ctx context.Context,
+ 	ev SampleEvaluator,
+ 	expr *syntax.LabelReplaceExpr,
+-- 
+2.39.3 (Apple Git-146)
+
+
+From d49ac677aaa60ee3f0489d7e3533855ddb93040e Mon Sep 17 00:00:00 2001
+From: vinayk-kfuse <vinayk@kloudfuse.com>
+Date: Wed, 13 Jul 2022 15:27:17 -0700
+Subject: [PATCH 2/8] Add methods to access private fields in IPLabel and
+ Binary filters.
+
+---
+ pkg/logql/log/ip.go           | 12 ++++++++++++
+ pkg/logql/log/label_filter.go |  4 ++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/pkg/logql/log/ip.go b/pkg/logql/log/ip.go
+index c3c06c827..06f1078a5 100644
+--- a/pkg/logql/log/ip.go
++++ b/pkg/logql/log/ip.go
+@@ -118,6 +118,18 @@ func (f *IPLabelFilter) PatternError() error {
+ 	return f.patError
+ }
+ 
++func (f *IPLabelFilter) GetType() LabelFilterType {
++	return f.ty
++}
++
++func (f *IPLabelFilter) GetPattern() string {
++	return f.pattern
++}
++
++func (f *IPLabelFilter) GetLabel() string {
++	return f.label
++}
++
+ func (f *IPLabelFilter) filterTy(_ []byte, ty LabelFilterType, lbs *LabelsBuilder) bool {
+ 	if lbs.HasErr() {
+ 		// why `true`?. if there's an error only the string matchers can filter out.
+diff --git a/pkg/logql/log/label_filter.go b/pkg/logql/log/label_filter.go
+index 249f1c659..50e0fa427 100644
+--- a/pkg/logql/log/label_filter.go
++++ b/pkg/logql/log/label_filter.go
+@@ -104,6 +104,10 @@ func (b *BinaryLabelFilter) RequiredLabelNames() []string {
+ 	return uniqueString(names)
+ }
+ 
++func (b *BinaryLabelFilter) IsOpAnd() bool {
++	return b.and
++}
++
+ func (b *BinaryLabelFilter) String() string {
+ 	var sb strings.Builder
+ 	sb.WriteString("( ")
+-- 
+2.39.3 (Apple Git-146)
+
+
+From 186b77f0ce7e59297557bbf4c9aee3cabab682f2 Mon Sep 17 00:00:00 2001
+From: vinayk-kfuse <105882164+vinayk-kfuse@users.noreply.github.com>
+Date: Fri, 22 Jul 2022 15:27:38 -0700
+Subject: [PATCH 3/8] Add function to get the regex and capture positions for
+ pattern parser capture expression. (#3)
+
+* Add function to get the regex and capture positions for pattern parser capture expression.
+
+* Add more characters to escape.
+---
+ pkg/logql/log/parser.go              |  4 ++
+ pkg/logql/log/pattern/ast.go         | 63 +++++++++++++++++++++++++---
+ pkg/logql/log/pattern/parser.go      |  2 +-
+ pkg/logql/log/pattern/parser_test.go | 16 +++----
+ pkg/logql/log/pattern/pattern.go     |  7 +++-
+ 5 files changed, 77 insertions(+), 15 deletions(-)
+
+diff --git a/pkg/logql/log/parser.go b/pkg/logql/log/parser.go
+index e42dac8cb..54afdd129 100644
+--- a/pkg/logql/log/parser.go
++++ b/pkg/logql/log/parser.go
+@@ -346,6 +346,10 @@ func (l *PatternParser) Process(line []byte, lbs *LabelsBuilder) ([]byte, bool)
+ 
+ func (l *PatternParser) RequiredLabelNames() []string { return []string{} }
+ 
++func (l *PatternParser) GetMatchNames() []string { return l.names }
++
++func (l *PatternParser) GetMatcher() pattern.Matcher { return l.matcher }
++
+ type JSONExpressionParser struct {
+ 	expressions map[string][]interface{}
+ 
+diff --git a/pkg/logql/log/pattern/ast.go b/pkg/logql/log/pattern/ast.go
+index b4cf8e813..0220b88d4 100644
+--- a/pkg/logql/log/pattern/ast.go
++++ b/pkg/logql/log/pattern/ast.go
+@@ -2,6 +2,7 @@ package pattern
+ 
+ import (
+ 	"fmt"
++	"strings"
+ 	"unicode/utf8"
+ )
+ 
+@@ -9,13 +10,13 @@ type node interface {
+ 	fmt.Stringer
+ }
+ 
+-type expr []node
++type Expr []node
+ 
+-func (e expr) hasCapture() bool {
++func (e Expr) hasCapture() bool {
+ 	return e.captureCount() != 0
+ }
+ 
+-func (e expr) validate() error {
++func (e Expr) validate() error {
+ 	if !e.hasCapture() {
+ 		return ErrNoCapture
+ 	}
+@@ -42,7 +43,7 @@ func (e expr) validate() error {
+ 	return nil
+ }
+ 
+-func (e expr) captures() (captures []string) {
++func (e Expr) captures() (captures []string) {
+ 	for _, n := range e {
+ 		if c, ok := n.(capture); ok && !c.isUnamed() {
+ 			captures = append(captures, c.Name())
+@@ -51,7 +52,59 @@ func (e expr) captures() (captures []string) {
+ 	return
+ }
+ 
+-func (e expr) captureCount() (count int) {
++func (e Expr) escapeString(i string) string {
++	// note: \ should be at the beginning of this string, so that we don't escape escaped characters again.
++	s := `\[](){}.+*?|^$`
++	for _, c := range s {
++		if strings.Contains(i, string(c)) {
++			i = strings.ReplaceAll(i, string(c), `\`+string(c))
++		}
++	}
++	return i
++}
++
++func (e Expr) CapturesMapWithRegex() (string, map[string]int) {
++	var sb strings.Builder
++	m := map[string]int{}
++	if len(e) == 0 {
++		return "", m
++	}
++	gid := 1
++	lnCapture := false
++	lUnamed := false
++	sb.WriteString("^")
++	for i, n := range e {
++		if c, ok := n.(capture); ok && !c.isUnamed() {
++			m[c.Name()] = gid
++			sb.WriteString("(.+?)")
++			gid += 1
++			if i == len(e)-1 {
++				lnCapture = true
++			}
++			lUnamed = false
++		} else if c.isUnamed() {
++			if lUnamed {
++				continue
++			}
++			sb.WriteString(".*?")
++			lUnamed = true
++		}
++		if l, ok := n.(literals); ok {
++			sb.WriteString(e.escapeString(string(l)))
++			lUnamed = false
++		}
++	}
++
++	if lnCapture {
++		sb.WriteString("$")
++	} else {
++		sb.WriteString(".*?$")
++	}
++
++	return sb.String(), m
++}
++
++func (e Expr) captureCount() (count int) {
+ 	return len(e.captures())
+ }
+ 
+diff --git a/pkg/logql/log/pattern/parser.go b/pkg/logql/log/pattern/parser.go
+index d1bc2515c..4be2e0ff7 100644
+--- a/pkg/logql/log/pattern/parser.go
++++ b/pkg/logql/log/pattern/parser.go
+@@ -18,7 +18,7 @@ func init() {
+ 	}
+ }
+ 
+-func parseExpr(input string) (expr, error) {
++func parseExpr(input string) (Expr, error) {
+ 	l := newLexer()
+ 	l.setData([]byte(input))
+ 	e := exprNewParser().Parse(l)
+diff --git a/pkg/logql/log/pattern/parser_test.go b/pkg/logql/log/pattern/parser_test.go
+index b46f8a202..1afe75030 100644
+--- a/pkg/logql/log/pattern/parser_test.go
++++ b/pkg/logql/log/pattern/parser_test.go
+@@ -9,42 +9,42 @@ import (
+ func Test_Parse(t *testing.T) {
+ 	for _, tc := range []struct {
+ 		input    string
+-		expected expr
++		expected Expr
+ 		err      error
+ 	}{
+ 		{
+ 			"<foo> bar f <f>",
+-			expr{capture("foo"), literals(" bar f "), capture("f")},
++			Expr{capture("foo"), literals(" bar f "), capture("f")},
+ 			nil,
+ 		},
+ 		{
+ 			"<foo",
+-			expr{literals("<foo")},
++			Expr{literals("<foo")},
+ 			nil,
+ 		},
+ 		{
+ 			"<foo ><bar>",
+-			expr{literals("<foo >"), capture("bar")},
++			Expr{literals("<foo >"), capture("bar")},
+ 			nil,
+ 		},
+ 		{
+ 			"<>",
+-			expr{literals("<>")},
++			Expr{literals("<>")},
+ 			nil,
+ 		},
+ 		{
+ 			"<_>",
+-			expr{capture("_")},
++			Expr{capture("_")},
+ 			nil,
+ 		},
+ 		{
+ 			"<1_>",
+-			expr{literals("<1_>")},
++			Expr{literals("<1_>")},
+ 			nil,
+ 		},
+ 		{
+ 			`<ip> - <user> [<_>] "<method> <path> <_>" <status> <size> <url> <user_agent>`,
+-			expr{capture("ip"), literals(" - "), capture("user"), literals(" ["), capture("_"), literals(`] "`), capture("method"), literals(" "), capture("path"), literals(" "), capture('_'), literals(`" `), capture("status"), literals(" "), capture("size"), literals(" "), capture("url"), literals(" "), capture("user_agent")},
++			Expr{capture("ip"), literals(" - "), capture("user"), literals(" ["), capture("_"), literals(`] "`), capture("method"), literals(" "), capture("path"), literals(" "), capture('_'), literals(`" `), capture("status"), literals(" "), capture("size"), literals(" "), capture("url"), literals(" "), capture("user_agent")},
+ 			nil,
+ 		},
+ 	} {
+diff --git a/pkg/logql/log/pattern/pattern.go b/pkg/logql/log/pattern/pattern.go
+index c1c65739f..bc648982b 100644
+--- a/pkg/logql/log/pattern/pattern.go
++++ b/pkg/logql/log/pattern/pattern.go
+@@ -13,10 +13,11 @@ var (
+ type Matcher interface {
+ 	Matches(in []byte) [][]byte
+ 	Names() []string
++	GetExpr() Expr
+ }
+ 
+ type matcher struct {
+-	e expr
++	e Expr
+ 
+ 	captures [][]byte
+ 	names    []string
+@@ -93,3 +94,7 @@ func (m *matcher) Matches(in []byte) [][]byte {
+ func (m *matcher) Names() []string {
+ 	return m.names
+ }
++
++func (m *matcher) GetExpr() Expr {
++	return m.e
++}
+-- 
+2.39.3 (Apple Git-146)
+
+
+From 138e3798e7df5f706a1f83d9784927879309bb20 Mon Sep 17 00:00:00 2001
+From: vinayk-kfuse <vinayk@kloudfuse.com>
+Date: Tue, 26 Jul 2022 12:03:22 -0700
+Subject: [PATCH 4/8] Change generated regex to use named groups.
+
+---
+ pkg/logql/log/pattern/ast.go | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pkg/logql/log/pattern/ast.go b/pkg/logql/log/pattern/ast.go
+index 0220b88d4..f365fcee0 100644
+--- a/pkg/logql/log/pattern/ast.go
++++ b/pkg/logql/log/pattern/ast.go
+@@ -76,7 +76,7 @@ func (e Expr) CapturesMapWithRegex() (string, map[string]int) {
+ 	for i, n := range e {
+ 		if c, ok := n.(capture); ok && !c.isUnamed() {
+ 			m[c.Name()] = gid
+-			sb.WriteString("(.+?)")
++			sb.WriteString("(?P<" + c.Name() + ">.+?)")
+ 			gid += 1
+ 			if i == len(e)-1 {
+ 				lnCapture = true
+-- 
+2.39.3 (Apple Git-146)
+
+
+From 4fe2cf3529c641b8df54ea83ddc30f680c2d32dd Mon Sep 17 00:00:00 2001
+From: vinayk-kfuse <105882164+vinayk-kfuse@users.noreply.github.com>
+Date: Wed, 27 Jul 2022 14:45:00 -0700
+Subject: [PATCH 5/8] Add public functions to get regex and group names from
+ regex parser. (#4)
+
+---
+ pkg/logql/log/parser.go | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/pkg/logql/log/parser.go b/pkg/logql/log/parser.go
+index 54afdd129..e0c1d7418 100644
+--- a/pkg/logql/log/parser.go
++++ b/pkg/logql/log/parser.go
+@@ -251,6 +251,18 @@ func (r *RegexpParser) Process(line []byte, lbs *LabelsBuilder) ([]byte, bool) {
+ 
+ func (r *RegexpParser) RequiredLabelNames() []string { return []string{} }
+ 
++func (r *RegexpParser) GetRegexString() string {
++	return r.regex.String()
++}
++
++func (r *RegexpParser) GetGroupNames() map[string]int {
++	m := map[string]int{}
++	for k, v := range r.nameIndex {
++		m[v] = k
++	}
++	return m
++}
++
+ type LogfmtParser struct {
+ 	dec  *logfmt.Decoder
+ 	keys internedStringSet
+-- 
+2.39.3 (Apple Git-146)
+
+
+From 0763bdda6926704acba2bbf2693fc3243afa39a9 Mon Sep 17 00:00:00 2001
+From: vinayv-kf <81197235+vinayv-kf@users.noreply.github.com>
+Date: Thu, 11 Aug 2022 14:34:26 -0700
+Subject: [PATCH 6/8] Allow grouping for count_over_time (#5)
+
+- do not throw parse exception for grouping with count_over_time
+---
+ pkg/logql/syntax/ast.go | 3 ++-
+ pkg/loki/wal/00000000   | 0
+ pkg/loki/wal/00000001   | 0
+ 3 files changed, 2 insertions(+), 1 deletion(-)
+ create mode 100644 pkg/loki/wal/00000000
+ create mode 100644 pkg/loki/wal/00000001
+
+diff --git a/pkg/logql/syntax/ast.go b/pkg/logql/syntax/ast.go
+index cc060d980..0b0a726bd 100644
+--- a/pkg/logql/syntax/ast.go
++++ b/pkg/logql/syntax/ast.go
+@@ -766,7 +766,8 @@ func (e *RangeAggregationExpr) MatcherGroups() [][]*labels.Matcher {
+ func (e RangeAggregationExpr) validate() error {
+ 	if e.Grouping != nil {
+ 		switch e.Operation {
+-		case OpRangeTypeAvg, OpRangeTypeStddev, OpRangeTypeStdvar, OpRangeTypeQuantile, OpRangeTypeMax, OpRangeTypeMin, OpRangeTypeFirst, OpRangeTypeLast:
++		case OpRangeTypeAvg, OpRangeTypeStddev, OpRangeTypeStdvar, OpRangeTypeQuantile, OpRangeTypeMax, OpRangeTypeMin,
++			OpRangeTypeFirst, OpRangeTypeLast, OpRangeTypeCount:
+ 		default:
+ 			return fmt.Errorf("grouping not allowed for %s aggregation", e.Operation)
+ 		}
+diff --git a/pkg/loki/wal/00000000 b/pkg/loki/wal/00000000
+new file mode 100644
+index 000000000..e69de29bb
+diff --git a/pkg/loki/wal/00000001 b/pkg/loki/wal/00000001
+new file mode 100644
+index 000000000..e69de29bb
+-- 
+2.39.3 (Apple Git-146)
+
+
+From 04c9f0b5324e90325f48a74d0887a3a2808a4548 Mon Sep 17 00:00:00 2001
+From: vinay <vinayv@kloudfuse.com>
+Date: Thu, 18 Aug 2022 22:50:07 -0700
+Subject: [PATCH 7/8] Allow grouping for sum_over_time range aggregate
+
+---
+ pkg/logql/syntax/ast.go | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pkg/logql/syntax/ast.go b/pkg/logql/syntax/ast.go
+index 0b0a726bd..4d66be65e 100644
+--- a/pkg/logql/syntax/ast.go
++++ b/pkg/logql/syntax/ast.go
+@@ -767,7 +767,7 @@ func (e RangeAggregationExpr) validate() error {
+ 	if e.Grouping != nil {
+ 		switch e.Operation {
+ 		case OpRangeTypeAvg, OpRangeTypeStddev, OpRangeTypeStdvar, OpRangeTypeQuantile, OpRangeTypeMax, OpRangeTypeMin,
+-			OpRangeTypeFirst, OpRangeTypeLast, OpRangeTypeCount:
++			OpRangeTypeFirst, OpRangeTypeLast, OpRangeTypeCount, OpRangeTypeSum:
+ 		default:
+ 			return fmt.Errorf("grouping not allowed for %s aggregation", e.Operation)
+ 		}
+-- 
+2.39.3 (Apple Git-146)
+
+
+From f6984d800aca747777703081c48795e6c30aaf69 Mon Sep 17 00:00:00 2001
+From: vinay <vinayv@kloudfuse.com>
+Date: Tue, 6 Jun 2023 16:17:04 -0700
+Subject: [PATCH 8/8] Make VectorAggEvaluator public
+
+---
+ pkg/logql/evaluator.go | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pkg/logql/evaluator.go b/pkg/logql/evaluator.go
+index 848cab49c..4470cc8a7 100644
+--- a/pkg/logql/evaluator.go
++++ b/pkg/logql/evaluator.go
+@@ -189,7 +189,7 @@ func (ev *DefaultEvaluator) StepEvaluator(
+ 				return rangeAggEvaluator(iter.NewPeekingSampleIterator(it), rangExpr, q, rangExpr.Left.Offset)
+ 			})
+ 		}
+-		return vectorAggEvaluator(ctx, nextEv, e, q)
++		return VectorAggEvaluator(ctx, nextEv, e, q)
+ 	case *syntax.RangeAggregationExpr:
+ 		it, err := ev.querier.SelectSamples(ctx, SelectSampleParams{
+ 			&logproto.SampleQueryRequest{
+@@ -212,7 +212,7 @@ func (ev *DefaultEvaluator) StepEvaluator(
+ 	}
+ }
+ 
+-func vectorAggEvaluator(
++func VectorAggEvaluator(
+ 	ctx context.Context,
+ 	ev SampleEvaluator,
+ 	expr *syntax.VectorAggregationExpr,
+-- 
+2.39.3 (Apple Git-146)
+

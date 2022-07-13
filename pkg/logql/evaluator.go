@@ -204,9 +204,9 @@ func (ev *DefaultEvaluator) StepEvaluator(
 		}
 		return rangeAggEvaluator(iter.NewPeekingSampleIterator(it), e, q, e.Left.Offset)
 	case *syntax.BinOpExpr:
-		return binOpStepEvaluator(ctx, nextEv, e, q)
+		return BinOpStepEvaluator(ctx, nextEv, e, q)
 	case *syntax.LabelReplaceExpr:
-		return labelReplaceEvaluator(ctx, nextEv, e, q)
+		return LabelReplaceEvaluator(ctx, nextEv, e, q)
 	case *syntax.VectorExpr:
 		val, err := e.Value()
 		if err != nil {
@@ -518,9 +518,9 @@ func (r absentRangeVectorEvaluator) Error() error {
 	return r.iter.Error()
 }
 
-// binOpExpr explicitly does not handle when both legs are literals as
+// BinOpStepEvaluator binOpExpr explicitly does not handle when both legs are literals as
 // it makes the type system simpler and these are reduced in mustNewBinOpExpr
-func binOpStepEvaluator(
+func BinOpStepEvaluator(
 	ctx context.Context,
 	ev SampleEvaluator,
 	expr *syntax.BinOpExpr,
@@ -922,7 +922,7 @@ func (r *vectorIterator) Error() error {
 }
 
 // labelReplaceEvaluator
-func labelReplaceEvaluator(
+func LabelReplaceEvaluator(
 	ctx context.Context,
 	ev SampleEvaluator,
 	expr *syntax.LabelReplaceExpr,

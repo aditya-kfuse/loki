@@ -2339,7 +2339,7 @@ func TestStepEvaluator_Error(t *testing.T) {
 			ErrMock,
 		},
 		{
-			"binOpStepEvaluator",
+			"BinOpStepEvaluator",
 			`count_over_time({app="foo"}[1m]) / count_over_time({app="foo"}[1m])`,
 			&errorIteratorQuerier{
 				samples: []iter.SampleIterator{

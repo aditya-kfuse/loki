@@ -147,6 +147,13 @@ func NewEngine(opts EngineOpts, q Querier, l Limits, logger log.Logger) *Engine 
 	}
 }
 
+// WithEvaluator sets the loki engine with the passed in Evaluator. Useful in cases where an
+// Evaluator with push down capabilities can be used to improve performance
+func (e *Engine) WithEvaluator(evaluator Evaluator) *Engine {
+	e.evaluator = evaluator
+	return e
+}
+
 // Query creates a new LogQL query. Instant/Range type is derived from the parameters.
 func (ng *Engine) Query(params Params) Query {
 	return &query{
