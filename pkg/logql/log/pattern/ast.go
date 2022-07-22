@@ -2,6 +2,7 @@ package pattern
 
 import (
 	"fmt"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -9,13 +10,13 @@ type node interface {
 	fmt.Stringer
 }
 
-type expr []node
+type Expr []node
 
-func (e expr) hasCapture() bool {
+func (e Expr) hasCapture() bool {
 	return e.captureCount() != 0
 }
 
-func (e expr) validate() error {
+func (e Expr) validate() error {
 	if !e.hasCapture() {
 		return ErrNoCapture
 	}
@@ -42,7 +43,7 @@ func (e expr) validate() error {
 	return nil
 }
 
-func (e expr) captures() (captures []string) {
+func (e Expr) captures() (captures []string) {
 	for _, n := range e {
 		if c, ok := n.(capture); ok && !c.isUnamed() {
 			captures = append(captures, c.Name())
@@ -51,7 +52,59 @@ func (e expr) captures() (captures []string) {
 	return
 }
 
-func (e expr) captureCount() (count int) {
+func (e Expr) escapeString(i string) string {
+	// note: \ should be at the beginning of this string, so that we don't escape escaped characters again.
+	s := `\[](){}.+*?|^$`
+	for _, c := range s {
+		if strings.Contains(i, string(c)) {
+			i = strings.ReplaceAll(i, string(c), `\`+string(c))
+		}
+	}
+	return i
+}
+
+func (e Expr) CapturesMapWithRegex() (string, map[string]int) {
+	var sb strings.Builder
+	m := map[string]int{}
+	if len(e) == 0 {
+		return "", m
+	}
+	gid := 1
+	lnCapture := false
+	lUnamed := false
+	sb.WriteString("^")
+	for i, n := range e {
+		if c, ok := n.(capture); ok && !c.isUnamed() {
+			m[c.Name()] = gid
+			sb.WriteString("(.+?)")
+			gid += 1
+			if i == len(e)-1 {
+				lnCapture = true
+			}
+			lUnamed = false
+		} else if c.isUnamed() {
+			if lUnamed {
+				continue
+			}
+			sb.WriteString(".*?")
+			lUnamed = true
+		}
+		if l, ok := n.(literals); ok {
+			sb.WriteString(e.escapeString(string(l)))
+			lUnamed = false
+		}
+	}
+
+	if lnCapture {
+		sb.WriteString("$")
+	} else {
+		sb.WriteString(".*?$")
+	}
+
+	return sb.String(), m
+}
+
+func (e Expr) captureCount() (count int) {
 	return len(e.captures())
 }
 

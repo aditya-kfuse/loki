@@ -18,7 +18,7 @@ func init() {
 	}
 }
 
-func parseExpr(input string) (expr, error) {
+func parseExpr(input string) (Expr, error) {
 	l := newLexer()
 	l.setData([]byte(input))
 	e := exprNewParser().Parse(l)

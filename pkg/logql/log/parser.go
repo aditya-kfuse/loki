@@ -348,6 +348,10 @@ func (l *PatternParser) Process(_ int64, line []byte, lbs *LabelsBuilder) ([]byt
 
 func (l *PatternParser) RequiredLabelNames() []string { return []string{} }
 
+func (l *PatternParser) GetMatchNames() []string { return l.names }
+
+func (l *PatternParser) GetMatcher() pattern.Matcher { return l.matcher }
+
 type JSONExpressionParser struct {
 	expressions map[string][]interface{}
 

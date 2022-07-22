@@ -13,10 +13,11 @@ var (
 type Matcher interface {
 	Matches(in []byte) [][]byte
 	Names() []string
+	GetExpr() Expr
 }
 
 type matcher struct {
-	e expr
+	e Expr
 
 	captures [][]byte
 	names    []string
@@ -92,4 +93,8 @@ func (m *matcher) Matches(in []byte) [][]byte {
 
 func (m *matcher) Names() []string {
 	return m.names
+}
+
+func (m *matcher) GetExpr() Expr {
+	return m.e
 }
