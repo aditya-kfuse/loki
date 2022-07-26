@@ -76,7 +76,7 @@ func (e Expr) CapturesMapWithRegex() (string, map[string]int) {
 	for i, n := range e {
 		if c, ok := n.(capture); ok && !c.isUnamed() {
 			m[c.Name()] = gid
-			sb.WriteString("(.+?)")
+			sb.WriteString("(?P<" + c.Name() + ">.+?)")
 			gid += 1
 			if i == len(e)-1 {
 				lnCapture = true
