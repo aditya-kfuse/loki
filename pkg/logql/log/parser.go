@@ -252,6 +252,18 @@ func (r *RegexpParser) Process(_ int64, line []byte, lbs *LabelsBuilder) ([]byte
 
 func (r *RegexpParser) RequiredLabelNames() []string { return []string{} }
 
+func (r *RegexpParser) GetRegexString() string {
+	return r.regex.String()
+}
+
+func (r *RegexpParser) GetGroupNames() map[string]int {
+	m := map[string]int{}
+	for k, v := range r.nameIndex {
+		m[v] = k
+	}
+	return m
+}
+
 type LogfmtParser struct {
 	dec  *logfmt.Decoder
 	keys internedStringSet
