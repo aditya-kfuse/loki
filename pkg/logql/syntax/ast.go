@@ -792,7 +792,7 @@ func (e RangeAggregationExpr) validate() error {
 	if e.Grouping != nil {
 		switch e.Operation {
 		case OpRangeTypeAvg, OpRangeTypeStddev, OpRangeTypeStdvar, OpRangeTypeQuantile, OpRangeTypeMax, OpRangeTypeMin,
-			OpRangeTypeFirst, OpRangeTypeLast, OpRangeTypeCount:
+			OpRangeTypeFirst, OpRangeTypeLast, OpRangeTypeCount, OpRangeTypeSum:
 		default:
 			return fmt.Errorf("grouping not allowed for %s aggregation", e.Operation)
 		}
