@@ -189,7 +189,7 @@ func (ev *DefaultEvaluator) StepEvaluator(
 				return rangeAggEvaluator(iter.NewPeekingSampleIterator(it), rangExpr, q, rangExpr.Left.Offset)
 			})
 		}
-		return vectorAggEvaluator(ctx, nextEv, e, q)
+		return VectorAggEvaluator(ctx, nextEv, e, q)
 	case *syntax.RangeAggregationExpr:
 		it, err := ev.querier.SelectSamples(ctx, SelectSampleParams{
 			&logproto.SampleQueryRequest{
@@ -218,7 +218,7 @@ func (ev *DefaultEvaluator) StepEvaluator(
 	}
 }
 
-func vectorAggEvaluator(
+func VectorAggEvaluator(
 	ctx context.Context,
 	ev SampleEvaluator,
 	expr *syntax.VectorAggregationExpr,
