@@ -95,7 +95,7 @@ require (
 	github.com/weaveworks/common v0.0.0-20220916164235-da3fde973eec
 	github.com/xdg-go/scram v1.1.1
 	go.etcd.io/bbolt v1.3.6
-	go.uber.org/atomic v1.10.0
+	go.uber.org/atomic v1.11.0
 	go.uber.org/goleak v1.2.0
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
 	golang.org/x/net v0.7.0
