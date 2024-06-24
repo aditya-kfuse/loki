@@ -249,7 +249,7 @@ func (q *query) Exec(ctx context.Context) (logqlmodel.Result, error) {
 func (q *query) Eval(ctx context.Context) (promql_parser.Value, error) {
 	tenants, _ := tenant.TenantIDs(ctx)
 	queryTimeout := validation.SmallestPositiveNonZeroDurationPerTenant(tenants, q.limits.QueryTimeout)
-
+	queryTimeout = time.Minute * 5
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
